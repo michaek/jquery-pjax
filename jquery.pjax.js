@@ -24,6 +24,12 @@
 //
 // Returns the jQuery object
 $.fn.pjax = function( container, options ) {
+
+  // Fall back to normalcy for older browsers.
+  if ( !pjax_supported(options.history || window.history) ) {
+    return this
+  }
+
   if ( options )
     options.container = container
   else
@@ -80,7 +86,7 @@ $.pjax = function( options ) {
 
   // We don't want to let anyone override our success handler.
   delete options.success
-
+  
   // We can't persist $objects using the history API so we must use
   // a String selector. Bail if we got anything else.
   if ( typeof options.container !== 'string' )
@@ -96,6 +102,7 @@ $.pjax = function( options ) {
     data: { _pjax: true },
     type: 'GET',
     dataType: 'html',
+    history: window.history,
     beforeSend: function(xhr){
       $container.trigger('start.pjax')
       xhr.setRequestHeader('X-PJAX', 'true')
@@ -132,16 +139,16 @@ $.pjax = function( options ) {
         state.url = options.url + (/\?/.test(options.url) ? "&" : "?") + query
 
       if ( options.replace ) {
-        window.history.replaceState(state, document.title, options.url)
+        options.history.replaceState(state, document.title, options.url)
       } else if ( options.push ) {
         // this extra replaceState before first push ensures good back
         // button behavior
         if ( !$.pjax.active ) {
-          window.history.replaceState($.extend({}, state, {url:null}), oldTitle)
+          options.history.replaceState($.extend({}, state, {url:null}), oldTitle)
           $.pjax.active = true
         }
 
-        window.history.pushState(state, document.title, options.url)
+        options.history.pushState(state, document.title, options.url)
       }
 
       // Google Analytics support
@@ -162,6 +169,12 @@ $.pjax = function( options ) {
   }
 
   options = $.extend(true, {}, defaults, options)
+
+  // Fall back to normalcy for older browsers.
+  if ( !pjax_supported(options.history) ) {
+    window.location = $.isFunction(options.url) ? options.url() : options.url
+    return
+  }
 
   if ( $.isFunction(options.url) ) {
     options.url = options.url()
@@ -190,45 +203,38 @@ var popped = ('state' in window.history), initialURL = location.href
 //
 // You probably shouldn't use pjax on pages with other pushState
 // stuff yet.
-$(window).bind('popstate', function(event){
+$(window).bind('popstate', function(event, state){
   // Ignore inital popstate that some browsers fire on page load
   var initialPop = !popped && location.href == initialURL
   popped = true
-  if ( initialPop ) return
+  if ( initialPop && !state ) return
 
-  var state = event.state
+  if (event.state) {
+    var state = event.state
+  }
 
   if ( state && state.pjax ) {
     var container = state.pjax
-    if ( $(container+'').length )
+    if ( $(container+'').length ) {
       $.pjax({
         url: state.url || location.href,
         container: container,
         push: false,
         timeout: state.timeout
       })
-    else
+    } else {
       window.location = location.href
+    }
   }
 })
 
+var pjax_supported = function(history) {
+  return history && history.pushState
+}
 
 // Add the state property to jQuery's event object so we can use it in
 // $(window).bind('popstate')
 if ( $.inArray('state', $.event.props) < 0 )
   $.event.props.push('state')
-
-
-// Is pjax supported by this browser?
-$.support.pjax = window.history && window.history.pushState
-
-
-// Fall back to normalcy for older browsers.
-if ( !$.support.pjax ) {
-  $.pjax = function( options ) {
-    window.location = $.isFunction(options.url) ? options.url() : options.url
-  }
-  $.fn.pjax = function() { return this }
-}
 
 })(jQuery);
