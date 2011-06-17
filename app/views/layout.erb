@@ -9,11 +9,19 @@
   <script src="jquery.cookie.js"></script>
   <script src="pages.js"></script>
 
+  <script src="history.js"></script>
+
   <script src="jquery.pjax.js"></script>
+  <script src="jquery.ba-hashchange.js"></script>
   <script type="text/javascript">
     $(function(){
+      $.history.stateOptions = {pjax:'#main', timeout:500}
+      $.history.changeCallback = function(state){$.pjax_popstate(state)}
       // pjax
-      $('ul a').pjax('#main')
+      $('ul a').pjax('#main', {history: $.history})
+
+      $(window).hashchange();
+      
     })
   </script>
 
