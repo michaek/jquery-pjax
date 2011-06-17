@@ -24,9 +24,11 @@
 //
 // Returns the jQuery object
 $.fn.pjax = function( container, options ) {
+  
+  var options = $.extend({history: window.history}, options);
 
   // Fall back to normalcy for older browsers.
-  if ( !pjax_supported(options.history || window.history) ) {
+  if ( !pjax_supported(options.history) ) {
     return this
   }
 
@@ -193,26 +195,9 @@ $.pjax = function( options ) {
   return $.pjax.xhr
 }
 
-
-// Used to detect initial (useless) popstate.
-// If history.state exists, assume browser isn't going to fire initial popstate.
-var popped = ('state' in window.history), initialURL = location.href
-
-
-// popstate handler takes care of the back and forward buttons
-//
-// You probably shouldn't use pjax on pages with other pushState
-// stuff yet.
-$(window).bind('popstate', function(event, state){
-  // Ignore inital popstate that some browsers fire on page load
-  var initialPop = !popped && location.href == initialURL
-  popped = true
-  if ( initialPop && !state ) return
-
-  if (event.state) {
-    var state = event.state
-  }
-
+// Break popstate management into externally callable method,
+// so it can be used by history polyfills
+$.pjax_popstate = function(state){
   if ( state && state.pjax ) {
     var container = state.pjax
     if ( $(container+'').length ) {
@@ -226,6 +211,30 @@ $(window).bind('popstate', function(event, state){
       window.location = location.href
     }
   }
+}
+
+
+// Used to detect initial (useless) popstate.
+// If history.state exists, assume browser isn't going to fire initial popstate.
+var popped = ('state' in window.history), initialURL = location.href
+var lastURL = location.href.replace(location.hash, '').replace('#', '')
+
+// popstate handler takes care of the back and forward buttons
+//
+// You probably shouldn't use pjax on pages with other pushState
+// stuff yet.
+$(window).bind('popstate', function(event){
+  // Ignore inital popstate that some browsers fire on page load
+  var initialPop = !popped && location.href == initialURL
+  popped = true
+  // Because hash changes don't affect what the server renders, we ignore them
+  // Also, this allows hash-based history fallbacks from polyfills
+  var currentURL = location.pathname.replace(location.hash, '').replace('#', '')
+  if (initialPop || lastURL == currentURL) return
+  lastPath = location.pathname
+  
+  return false
+  $.pjax_popstate(event.state)
 })
 
 var pjax_supported = function(history) {
